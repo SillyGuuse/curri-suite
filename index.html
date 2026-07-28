@@ -858,7 +858,19 @@
     background:var(--card);color:var(--ink);border:1px solid var(--hair);border-radius:16px;
     padding:22px 22px 18px;box-shadow:0 30px 80px rgba(0,0,0,0.38);font-family:inherit;
     transition:top .2s ease,left .2s ease}
-  .tour-bubble.center{left:50%;top:50%;transform:translate(-50%,-50%);width:452px}
+  /* The bubble parks at -9999px and animates top/left as it moves between steps.
+     For a centred card that transition plays as a swoop in from off-screen --
+     harmless mid-tour, but it is the first thing a visitor sees now that the
+     opening step launches itself. So the centred variant drops the positional
+     transition and fades up on the spot instead. */
+  .tour-bubble.center{left:50%;top:50%;transform:translate(-50%,-50%);width:452px;
+    transition:none;animation:tour-rise .26s cubic-bezier(.22,.61,.36,1) both}
+  @keyframes tour-rise{
+    from{opacity:0;transform:translate(-50%,-46%) scale(.985)}
+    to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+  @media(prefers-reduced-motion:reduce){
+    .tour-bubble.center{animation:none}
+    .tour-bubble{transition:none}}
   .tour-eyebrow{font-size:12px;font-weight:600;letter-spacing:0.09em;text-transform:uppercase;color:var(--green)}
   .tour-title{font-size:21px;font-weight:600;letter-spacing:-0.02em;line-height:1.24;margin-top:9px}
   .tour-body{font-size:15px;line-height:1.56;color:var(--muted);margin-top:11px}
@@ -2592,11 +2604,36 @@
 
     window.__tour = { show:show, close:close, count:TOUR.length, at:function(){ return idx; } };
 
+    /* ---- Opening on arrival ----
+       The tour used to wait behind a pill in the bottom-right corner, which a
+       first-time reader has no reason to look at. Step 0 is already a centred
+       card, so it opens itself on entry instead.
+
+       Once per tab session, not once per page load: the hash router never
+       reloads, so this fires on arrival and stays out of the way afterwards.
+       `?tour=1` still forces it open (optionally at `&step=N`), and `?tour=0`
+       suppresses it for a screenshot or a demo that needs a clean first frame. */
+    var SEEN_KEY = "curri.tour.seen";
+
+    function seen(){
+      try { return sessionStorage.getItem(SEEN_KEY) === "1"; }
+      catch(e){ return false; }   /* private mode, file://, blocked storage */
+    }
+    function markSeen(){
+      try { sessionStorage.setItem(SEEN_KEY, "1"); } catch(e){}
+    }
+
     var qs = window.location.search || "";
     if(/[?&]tour=1(?:&|$)/.test(qs)){
       var m = qs.match(/[?&]step=(\d+)/);
       var s = m ? parseInt(m[1], 10) : 0;
       requestAnimationFrame(function(){ show(s); });
+    } else if(!/[?&]tour=0(?:&|$)/.test(qs) && !seen()){
+      /* .reveal runs a 0.7s fade; opening on top of it makes both look broken,
+         so the hero lands first and the card follows it. */
+      setTimeout(function(){
+        if(idx < 0){ markSeen(); show(0); }
+      }, 900);
     }
   })();
 
